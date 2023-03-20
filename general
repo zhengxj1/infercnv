@@ -1,0 +1,50 @@
+library(infercnv)
+library(Seurat)
+library(data.table)
+library(tidyverse)
+
+SeuratObject=nonimmunecell
+
+##检测一下
+infercnv_obj = CreateInfercnvObject(raw_counts_matrix=system.file("extdata", "oligodendroglioma_expression_downsampled.counts.matrix.gz", package = "infercnv"),
+                                   annotations_file=system.file("extdata", "oligodendroglioma_annotations_downsampled.txt", package = "infercnv"),
+                                   delim="\t",
+                                   gene_order_file=system.file("extdata", "gencode_downsampled.EXAMPLE_ONLY_DONT_REUSE.txt", package = "infercnv"),
+                                   ref_group_names=c("Microglia/Macrophage","Oligodendrocytes (non-malignant)")) 
+###原始表达矩阵
+matrix<-as.matrix(SeuratObject@assays$RNA@counts)
+matrix[1:3,1:3]
+
+
+##细胞注释 细胞=ID和对应的细胞类型（celltype）
+groupinfo=data.frame(V1=colnames(matrix),
+                      V2=SeuratObject@active.ident)
+####gene order
+library(AnnoProbe)
+geneInfor=annoGene(rownames(matrix),ID_type="SYMBOL",species ="human")
+geneInfor=geneInfor[with(geneInfor, order(chr, start)),c(1,4:6)]
+geneInfor=geneInfor[!duplicated(geneInfor[,1]),]
+
+head(geneInfor)
+matrix=matrix[rownames(matrix) %in% geneInfor[,1],]
+matrix=matrix[match( geneInfor[,1], rownames(matrix)),] 
+
+expFile='expFile.txt'
+write.table(matrix,file = expFile,sep = '\t',quote = F)
+groupFiles='groupFiles.txt'
+write.table(groupinfo,file = groupFiles,sep = '\t',quote = F,col.names = F,row.names = F)
+geneFile='geneFile.txt'
+write.table(geneInfor,file = geneFile,sep = '\t',quote = F,col.names = F,row.names = F)
+table(groupinfo[,2])
+
+infercnv_obj = CreateInfercnvObject(raw_counts_matrix='expFile.txt',delim = "\t",
+                                    annotations_file=groupinfo,
+                                    gene_order_file= geneInfor,
+                                    ref_group_names=c("6"))  ## 这个取决于自己的分组信息里面的
+
+infercnv_obj = infercnv::run(infercnv_obj,
+                             cutoff=1, # cutoff=1 works well for Smart-seq2, and cutoff=0.1 works well for 10x Genomics
+                             out_dir=tempfile(), 
+                             cluster_by_groups=TRUE, 
+                             denoise=TRUE,
+                             HMM=TRUE)
