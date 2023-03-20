@@ -1,0 +1,61 @@
+cnv_table <- read.table("plot_out/inferCNV_output2/infercnv.observations.txt", header=T)
+# Score cells based on their CNV scores 
+# Replicate the table 
+cnv_score_table <- as.matrix(cnv_table)
+cnv_score_mat <- as.matrix(cnv_table)
+# Scoring
+# CNV的5分类系统
+cnv_score_table[cnv_score_mat > 0 & cnv_score_mat < 0.3] <- "A" #complete loss. 2pts
+cnv_score_table[cnv_score_mat >= 0.3 & cnv_score_mat < 0.7] <- "B" #loss of one copy. 1pts
+cnv_score_table[cnv_score_mat >= 0.7 & cnv_score_mat < 1.3] <- "C" #Neutral. 0pts
+cnv_score_table[cnv_score_mat >= 1.3 & cnv_score_mat <= 1.5] <- "D" #addition of one copy. 1pts
+cnv_score_table[cnv_score_mat > 1.5 & cnv_score_mat <= 2] <- "E" #addition of two copies. 2pts
+cnv_score_table[cnv_score_mat > 2] <- "F" #addition of more than two copies. 2pts
+
+# Check
+table(cnv_score_table[,1])
+# Replace with score 
+cnv_score_table_pts <- cnv_table
+rm(cnv_score_mat)
+#  把5分类调整为 3分类系统
+cnv_score_table_pts[cnv_score_table == "A"] <- 2
+cnv_score_table_pts[cnv_score_table == "B"] <- 1
+cnv_score_table_pts[cnv_score_table == "C"] <- 0
+cnv_score_table_pts[cnv_score_table == "D"] <- 1
+cnv_score_table_pts[cnv_score_table == "E"] <- 2
+cnv_score_table_pts[cnv_score_table == "F"] <- 2
+
+# Scores are stored in “cnv_score_table_pts”. Use colSums to add up scores for each cell and store as vector 
+cell_scores_CNV <- as.data.frame(colSums(cnv_score_table_pts))
+colnames(cell_scores_CNV) <- "cnv_score"
+head(cell_scores_CNV)
+write.csv(x = cell_scores_CNV, file = "cnv_scores.csv")
+
+因为infercnv.observations.txt文件超级大，而且上面的代码很多地方并不高效，所以运行耗时很长哦！
+不同的细胞恶性与否判定方法的量化
+载入前面靠细胞分群是否跨越病人，以及全局CNV层次聚类，这两个策略判定的细胞恶性与否，目前就可以看CNV score啦
+
+load(file = 'phe-of-cancer-or-not.Rdata')
+phe=phe[rownames(phe) %in% rownames(cell_scores_CNV),]
+infercnv.labels <- cutree(infercnv.dend, k = 6, order_clusters_as_data = FALSE)
+phe$inferCNV= infercnv.labels[match(rownames(phe), names(infercnv.labels) )]
+phe$cnv_scores  =  cell_scores_CNV[rownames(phe),]
+table(phe$cancer,phe$inferCNV) 
+library(ggpubr)
+p1=ggboxplot(phe,'cancer','cnv_scores', fill = "cancer")
+p2=ggboxplot(phe,'inferCNV','cnv_scores', fill = "inferCNV")
+library(patchwork)
+p1+p2
+
+
+
+
+
+
+
+
+
+
+
+
+
