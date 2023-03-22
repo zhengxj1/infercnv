@@ -1,0 +1,4 @@
+library(gplots)
+sce=scRNA_harmony
+tab.1=table(sce@meta.data$RNA_snn_res.0.15,sce@meta.data$orig.ident) 
+balloonplot(tab.1)
